@@ -1,0 +1,418 @@
+import java.io.*;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Scanner;
+
+public class DailyExpenseTracker {
+
+    static final String ACCOUNT_FILE = "users.txt";
+    static final String EXPENSES_DIRECTORY = "expenses/";
+
+    // User Class
+    static class User {
+        private String username;
+        private String password;
+        private String role;
+        private ExpenseManager expenseManager;
+
+        public User(String username, String password, String role) {
+            this.username = username;
+            this.password = password;
+            this.role = role.toLowerCase();
+            this.expenseManager = new ExpenseManager(username);
+        }
+
+        public String getUsername() { return username; }
+        public String getPassword() { return password; }
+        public String getRole() { return role; }
+        public ExpenseManager getExpenseManager() { return expenseManager; }
+    }
+
+    // Expense Class
+    static class Expense {
+        private String category;
+        private double amount;
+        private String date;
+
+        public Expense(String category, double amount, String date) {
+            this.category = category;
+            this.amount = amount;
+            this.date = date;
+        }
+
+        public double getAmount() { return amount; }
+
+        @Override
+        public String toString() {
+            return "Category: " + category + ", Amount: " + amount + " TK, Date: " + date;
+        }
+    }
+
+    // Expense Manager Class
+    static class ExpenseManager {
+        private ArrayList<Expense> expenses;
+        private String username;
+
+        public ExpenseManager(String username) {
+            this.username = username;
+            this.expenses = loadExpenses(username);
+        }
+
+        public void addExpense(String category, double amount, String date) {
+            Expense expense = new Expense(category, amount, date);
+            expenses.add(expense);
+            saveExpenses();
+        }
+
+        public void viewExpenses() {
+            if (expenses.isEmpty()) {
+                System.out.println("No expenses recorded.");
+            } else {
+                for (Expense expense : expenses) {
+                    System.out.println(expense);
+                }
+            }
+        }
+
+        public void listExpensesWithIndex() {
+            if (expenses.isEmpty()) {
+                System.out.println("No expenses recorded.");
+            } else {
+                for (int i = 0; i < expenses.size(); i++) {
+                    System.out.println((i + 1) + ". " + expenses.get(i));
+                }
+            }
+        }
+
+        public void editExpense(int index, String newCategory, double newAmount, String newDate) {
+            if (index >= 0 && index < expenses.size()) {
+                expenses.set(index, new Expense(newCategory, newAmount, newDate));
+                System.out.println("Expense updated successfully.");
+                saveExpenses();
+            } else {
+                System.out.println("Invalid expense number.");
+            }
+        }
+
+        public void deleteExpenseByCategory(String category) {
+            boolean removed = expenses.removeIf(e -> e.category.equalsIgnoreCase(category));
+            if (removed) {
+                System.out.println("Expenses under category '" + category + "' deleted.");
+                saveExpenses();
+            } else {
+                System.out.println("No expenses found for category '" + category + "'.");
+            }
+        }
+
+        public double calculateTotal() {
+            double total = 0;
+            for (Expense expense : expenses) {
+                total += expense.getAmount();
+            }
+            return total;
+        }
+
+        private ArrayList<Expense> loadExpenses(String username) {
+            ArrayList<Expense> loadedExpenses = new ArrayList<>();
+            File file = new File(EXPENSES_DIRECTORY + username + "_expenses.txt");
+            if (!file.exists()) {
+                return loadedExpenses;
+            }
+
+            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split(",");
+                    if (parts.length == 3) {
+                        String category = parts[0];
+                        double amount = Double.parseDouble(parts[1]);
+                        String date = parts[2];
+                        loadedExpenses.add(new Expense(category, amount, date));
+                    }
+                }
+            } catch (IOException e) {
+                System.out.println("Error loading expenses: " + e.getMessage());
+            }
+            return loadedExpenses;
+        }
+
+        private void saveExpenses() {
+            File dir = new File(EXPENSES_DIRECTORY);
+            if (!dir.exists()) {
+                dir.mkdir();
+            }
+
+            File file = new File(EXPENSES_DIRECTORY + username + "_expenses.txt");
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+                for (Expense expense : expenses) {
+                    writer.write(expense.category + "," + expense.amount + "," + expense.date);
+                    writer.newLine();
+                }
+            } catch (IOException e) {
+                System.out.println("Error saving expenses: " + e.getMessage());
+            }
+        }
+    }
+
+    public static HashMap<String, User> loadUsers() {
+        HashMap<String, User> users = new HashMap<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(ACCOUNT_FILE))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 3) {
+                    String username = parts[0];
+                    String password = parts[1];
+                    String role = parts[2];
+                    users.put(username, new User(username, password, role));
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("No existing users found. Starting fresh.");
+        }
+        return users;
+    }
+
+    public static void saveUser(User user) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(ACCOUNT_FILE, true))) {
+            bw.write(user.getUsername() + "," + user.getPassword() + "," + user.getRole());
+            bw.newLine();
+        } catch (IOException e) {
+            System.out.println("Failed to save user: " + e.getMessage());
+        }
+    }
+
+    public static void removeUserFromFile(String usernameToRemove) {
+        File inputFile = new File(ACCOUNT_FILE);
+        File tempFile = new File("temp_users.txt");
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile));
+             BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+
+            String currentLine;
+            while ((currentLine = reader.readLine()) != null) {
+                String[] parts = currentLine.split(",");
+                if (!parts[0].equals(usernameToRemove)) {
+                    writer.write(currentLine);
+                    writer.newLine();
+                }
+            }
+
+        } catch (IOException e) {
+            System.out.println("Error removing user: " + e.getMessage());
+            return;
+        }
+
+        if (inputFile.delete()) {
+            tempFile.renameTo(inputFile);
+        } else {
+            System.out.println("Could not delete original file.");
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        HashMap<String, User> users = loadUsers();
+        User currentUser = null;
+
+        while (true) {
+            if (currentUser == null) {
+                System.out.println("\n=== Welcome to Daily Expense Tracker ===");
+                System.out.println("1. Create Account");
+                System.out.println("2. Log In");
+                System.out.println("3. Exit");
+                System.out.print("Choose an option: ");
+                String choice = scanner.nextLine();
+
+                switch (choice) {
+                    case "1":
+                        System.out.println("[INFO] You selected: Create Account");
+                        System.out.print("Enter username: ");
+                        String newUsername = scanner.nextLine();
+                        if (users.containsKey(newUsername)) {
+                            System.out.println("Username already exists. Try another.");
+                            break;
+                        }
+
+                        System.out.print("Enter password: ");
+                        String newPassword = scanner.nextLine();
+
+                        String role;
+                        while (true) {
+                            System.out.print("Enter role (admin/user): ");
+                            role = scanner.nextLine().toLowerCase();
+                            if (role.equals("admin") || role.equals("user")) break;
+                            else System.out.println("Invalid role. Choose 'admin' or 'user'.");
+                        }
+
+                        User newUser = new User(newUsername, newPassword, role);
+                        users.put(newUsername, newUser);
+                        saveUser(newUser);
+                        System.out.println("Account created and saved successfully!");
+                        break;
+
+                    case "2":
+                        System.out.println("[INFO] You selected: Log In");
+                        System.out.print("Enter username: ");
+                        String loginUsername = scanner.nextLine();
+                        System.out.print("Enter password: ");
+                        String loginPassword = scanner.nextLine();
+
+                        if (users.containsKey(loginUsername) &&
+                                users.get(loginUsername).getPassword().equals(loginPassword)) {
+                            currentUser = users.get(loginUsername);
+                            System.out.println("[INFO] Login successful! Welcome, " + currentUser.getUsername());
+                            System.out.println("[INFO] Logged in as: " + currentUser.getRole().toUpperCase());
+                        } else {
+                            System.out.println("Invalid username or password.");
+                        }
+                        break;
+
+                    case "3":
+                        System.out.println("[INFO] You selected: Exit");
+                        scanner.close();
+                        return;
+
+                    default:
+                        System.out.println("Invalid option. Try again.");
+                }
+
+            } else {
+                System.out.println("\n=== Dashboard (" + currentUser.getRole().toUpperCase() + ") ===");
+                System.out.println("1. Add Expense");
+                System.out.println("2. View Expenses");
+                System.out.println("3. Calculate Total Expenses");
+                System.out.println("4. Edit Expense");
+                System.out.println("5. Delete Expense by Category");
+
+                if (currentUser.getRole().equals("admin")) {
+                    System.out.println("6. View Total Registered Users");
+                    System.out.println("7. Open Admin Panel");
+                    System.out.println("8. Log Out");
+                } else {
+                    System.out.println("6. Log Out");
+                }
+
+                System.out.print("Choose an option: ");
+                String choice = scanner.nextLine();
+
+                switch (choice) {
+                    case "1":
+                        System.out.print("Enter category: ");
+                        String category = scanner.nextLine();
+
+                        double amount;
+                        while (true) {
+                            System.out.print("Enter costing in TK: ");
+                            if (scanner.hasNextDouble()) {
+                                amount = scanner.nextDouble();
+                                if (amount > 0) break;
+                                else System.out.println("Amount must be positive.");
+                            } else {
+                                System.out.println("Invalid input. Enter a valid number.");
+                            }
+                            scanner.next(); // clear invalid input
+                        }
+                        scanner.nextLine(); // clear newline
+
+                        String date = LocalDate.now().toString();
+                        System.out.println("Date automatically set to: " + date);
+
+                        currentUser.getExpenseManager().addExpense(category, amount, date);
+                        System.out.println("Expense added!");
+                        break;
+
+                    case "2":
+                        currentUser.getExpenseManager().viewExpenses();
+                        break;
+
+                    case "3":
+                        double total = currentUser.getExpenseManager().calculateTotal();
+                        System.out.printf("Total Expenses: %.2f TK\n", total);
+                        break;
+
+                    case "4":
+                        currentUser.getExpenseManager().listExpensesWithIndex();
+                        System.out.print("Enter the number of the expense to edit: ");
+                        int indexToEdit = Integer.parseInt(scanner.nextLine()) - 1;
+
+                        System.out.print("New category: ");
+                        String newCat = scanner.nextLine();
+                        System.out.print("New amount: ");
+                        double newAmt = Double.parseDouble(scanner.nextLine());
+                        System.out.print("New date (YYYY-MM-DD): ");
+                        String newDate = scanner.nextLine();
+
+                        currentUser.getExpenseManager().editExpense(indexToEdit, newCat, newAmt, newDate);
+                        break;
+
+                    case "5":
+                        System.out.print("Enter category to delete expenses: ");
+                        String catToDelete = scanner.nextLine();
+                        currentUser.getExpenseManager().deleteExpenseByCategory(catToDelete);
+                        break;
+
+                    case "6":
+                        if (currentUser.getRole().equals("admin")) {
+                            System.out.println("Total Registered Users: " + users.size());
+                        } else {
+                            System.out.println("Logged out successfully.");
+                            currentUser = null;
+                        }
+                        break;
+
+                    case "7":
+                        if (currentUser.getRole().equals("admin")) {
+                            showAdminPanel(users);
+                        } else {
+                            System.out.println("Invalid option. Try again.");
+                        }
+                        break;
+
+                    case "8":
+                        if (currentUser.getRole().equals("admin")) {
+                            System.out.println("Logged out successfully.");
+                            currentUser = null;
+                        } else {
+                            System.out.println("Invalid option. Try again.");
+                        }
+                        break;
+
+                    default:
+                        System.out.println("Invalid option. Try again.");
+                }
+            }
+        }
+    }
+
+    public static void showAdminPanel(HashMap<String, User> users) {
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("\n=== Admin Panel ===");
+        System.out.println("All registered users:");
+        for (String username : users.keySet()) {
+            User u = users.get(username);
+            System.out.println("- " + username + " (Role: " + u.getRole() + ")");
+        }
+
+        System.out.print("Do you want to remove a user? (yes/no): ");
+        String response = scanner.nextLine().toLowerCase();
+
+        if (response.equals("yes")) {
+            System.out.print("Enter the username to remove: ");
+            String userToRemove = scanner.nextLine();
+
+            if (users.containsKey(userToRemove)) {
+                if (users.get(userToRemove).getRole().equals("admin")) {
+                    System.out.println("You cannot remove another admin.");
+                } else {
+                    users.remove(userToRemove);
+                    removeUserFromFile(userToRemove);
+                    System.out.println("User '" + userToRemove + "' removed successfully.");
+                }
+            } else {
+                System.out.println("User not found.");
+            }
+        }
+    }
+}
